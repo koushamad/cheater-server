@@ -8,10 +8,12 @@ WORKDIR /app
 COPY . .
 
 # Build the application
-RUN go build -o app
+RUN go mod download
+RUN go mod vendor
+RUN go build -o cheater
 
 # Expose port 8080
 EXPOSE 8080
 
 # Set entrypoint
-ENTRYPOINT ["./app"]
+ENTRYPOINT ["./cheater"]
