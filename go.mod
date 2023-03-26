@@ -1,4 +1,4 @@
-module github.com/koushamad/cheaterServerWS
+module github.com/koushamad/cheater-server
 
 go 1.18
 
