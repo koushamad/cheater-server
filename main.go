@@ -1,62 +1,116 @@
 package main
 
 import (
-	"fmt"
-	"github.com/gorilla/websocket"
+	"encoding/json"
+	"log"
 	"net/http"
+
+	"github.com/gorilla/websocket"
 )
 
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
+// Message struct
+type Message struct {
+	Id      string `json:"id"`
+	Client  string `json:"client"`
+	Content string `json:"content"`
 }
+
+var upgrader = websocket.Upgrader{
+	ReadBufferSize:  10240,
+	WriteBufferSize: 10240,
+}
+
+type client struct {
+	conn   *websocket.Conn
+	id     string
+	client string
+}
+
+var clients = make(map[*client]bool)
+var broadcast = make(chan *Message, 8)
 
 func main() {
-	runWS()
-}
+	// Upgrade HTTP connections to WebSocket connections
+	http.HandleFunc("/ws", handleWebSocket)
 
-func runWS() {
-	http.HandleFunc("/ws", wsHandler)
-	fmt.Println("starting ws server at :8080")
+	// Start broadcasting messages
+	go handleMessages()
+
+	// Listen on port 8080
+	log.Println("Listening on port 8080...")
 	err := http.ListenAndServe(":8080", nil)
 	if err != nil {
-		fmt.Println("ListenAndServe: ", err)
+		log.Fatal("ListenAndServe: ", err)
 	}
 }
 
-func wsHandler(w http.ResponseWriter, r *http.Request) {
-	// Upgrade HTTP request to WebSocket
+func handleWebSocket(w http.ResponseWriter, r *http.Request) {
+	// Upgrade HTTP connection to WebSocket connection
 	upgrader.CheckOrigin = func(r *http.Request) bool { return true }
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		fmt.Println(err)
+		log.Println("Upgrade error: ", err)
 		return
 	}
 
-	// Send a message to the client
-	message := []byte("Hello, client!")
-	err = conn.WriteMessage(websocket.TextMessage, message)
+	// Read the ID and client from the first message
+	_, msg, err := conn.ReadMessage()
 	if err != nil {
-		fmt.Println(err)
+		log.Println("Read error: ", err)
 		return
 	}
 
-	// Listen for incoming messages from the client
+	var message Message
+	err = json.Unmarshal(msg, &message)
+	if err != nil {
+		log.Println("Unmarshal error: ", err)
+		return
+	}
+
+	// Create a new client
+	c := &client{conn: conn, id: message.Id, client: message.Client}
+	clients[c] = true
+
+	// Listen for messages from the client
+	go handleClientMessages(c)
+}
+
+func handleClientMessages(c *client) {
 	for {
-		messageType, p, err := conn.ReadMessage()
+		_, msg, err := c.conn.ReadMessage()
 		if err != nil {
-			fmt.Println(err)
+			log.Println("Read error: ", err)
+			delete(clients, c)
 			return
 		}
 
-		fmt.Printf("Received message: %s\n", p)
-
-		// Respond to the message
-		response := []byte("You said: " + string(p))
-		err = conn.WriteMessage(messageType, response)
+		var message Message
+		err = json.Unmarshal(msg, &message)
 		if err != nil {
-			fmt.Println(err)
-			return
+			log.Println("Unmarshal error: ", err)
+			continue
+		}
+
+		// Broadcast the message to all clients with the same ID
+		message.Client = c.client
+		broadcast <- &message
+	}
+}
+
+func handleMessages() {
+	for {
+		// Get the next message from the broadcast channel
+		message := <-broadcast
+
+		// Send the message to all clients with the same ID
+		for c := range clients {
+			if c.id == message.Id && c.client != message.Client {
+				err := c.conn.WriteJSON(message)
+				if err != nil {
+					log.Println("Write error: ", err)
+					delete(clients, c)
+				}
+			}
 		}
 	}
 }
