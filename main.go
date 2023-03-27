@@ -10,7 +10,7 @@ import (
 
 // Message struct
 type Message struct {
-	Id      string `json:"id"`
+	ApiKey  string `json:"apiKey"`
 	Client  string `json:"client"`
 	Content string `json:"content"`
 }
@@ -22,7 +22,7 @@ var upgrader = websocket.Upgrader{
 
 type client struct {
 	conn   *websocket.Conn
-	id     string
+	apiKey string
 	client string
 }
 
@@ -68,7 +68,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create a new client
-	c := &client{conn: conn, id: message.Id, client: message.Client}
+	c := &client{conn: conn, apiKey: message.ApiKey, client: message.Client}
 	clients[c] = true
 
 	// Listen for messages from the client
@@ -100,16 +100,22 @@ func handleClientMessages(c *client) {
 func handleMessages() {
 	for {
 		// Get the next message from the broadcast channel
-		message := <-broadcast
+		message := *<-broadcast
 
 		// Send the message to all clients with the same ID
-		for c := range clients {
-			if c.id == message.Id && c.client != message.Client {
-				err := c.conn.WriteJSON(message)
-				if err != nil {
-					log.Println("Write error: ", err)
-					delete(clients, c)
-				}
+		if message.Client != "server" {
+			sendToClient(message)
+		}
+	}
+}
+
+func sendToClient(message Message) {
+	for c := range clients {
+		if c.apiKey == message.ApiKey && c.client == message.Client {
+			err := c.conn.WriteJSON(message)
+			if err != nil {
+				log.Println("Write error: ", err)
+				delete(clients, c)
 			}
 		}
 	}
