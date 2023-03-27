@@ -15,6 +15,7 @@ const Client = "server"
 type Message struct {
 	ApiKey  string `json:"apiKey"`
 	Client  string `json:"client"`
+	Type    string `json:"type"`
 	Content string `json:"content"`
 }
 
