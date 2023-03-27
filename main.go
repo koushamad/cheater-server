@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 
@@ -69,6 +70,8 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	fmt.Println(message)
+
 	// Create a new client
 	c := &client{conn: conn, apiKey: message.ApiKey, client: message.Client}
 	clients[c] = true
@@ -92,6 +95,8 @@ func handleClientMessages(c *client) {
 			log.Println("Unmarshal error: ", err)
 			continue
 		}
+
+		fmt.Println(message)
 
 		// Broadcast the message to all clients with the same ID
 		broadcast <- &message
@@ -117,7 +122,6 @@ func sendToClient(message Message) {
 			if err != nil {
 				log.Println("Write error: ", err)
 				delete(clients, c)
-
 			}
 		}
 	}
