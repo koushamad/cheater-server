@@ -8,6 +8,8 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+const Client = "server"
+
 // Message struct
 type Message struct {
 	ApiKey  string `json:"apiKey"`
@@ -92,7 +94,6 @@ func handleClientMessages(c *client) {
 		}
 
 		// Broadcast the message to all clients with the same ID
-		message.Client = c.client
 		broadcast <- &message
 	}
 }
@@ -103,7 +104,7 @@ func handleMessages() {
 		message := *<-broadcast
 
 		// Send the message to all clients with the same ID
-		if message.Client != "server" {
+		if message.Client != Client {
 			sendToClient(message)
 		}
 	}
@@ -116,6 +117,7 @@ func sendToClient(message Message) {
 			if err != nil {
 				log.Println("Write error: ", err)
 				delete(clients, c)
+
 			}
 		}
 	}
